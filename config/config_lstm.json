@@ -1,0 +1,48 @@
+{
+    "data": {
+      "renamed_requests_col": "req_target",
+      "renamed_errors_col": "err_target"
+    },
+    "feature_engineering": {
+        "requests_lags": {
+          "hours":  [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23],
+          "days":   [24, 48, 72, 96, 120, 144, 168],
+          "weeks":  [168]
+        },
+    
+        "errors_lags": {
+          "hours": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23]
+        }
+    },
+    "model": {
+      "requests": {
+        "lstm_32_req": {
+          "layers": [
+            { "units": 32, "return_sequences": false, "dropout": 0.1 }
+          ]
+        }
+      },
+      "errors": {
+        "lstm_16_err": {
+          "layers": [
+            { "units": 16, "return_sequences": false, "dropout": 0.15 }
+          ]
+        }
+      }
+    },
+    "training": {
+        "timesteps": 24,
+        "train_window": 528,
+        "predict_window": 336,
+        "epochs": 30,
+        "learning_rate": 0.0032,
+        "batch_size": 1024,
+        "validation_split": 0.1,
+        "early_stopping_patience": 5
+    },
+    "output": {
+      "results_dir": "results",
+      "save_results": true,
+      "save_daily_metrics": true
+    }
+  }
