@@ -80,4 +80,5 @@ python main.py --data-dir data/ --decoder --config config/config_model.json
  --single-dataset errors
 
 Результаты модели лежат в result. Названия папок в result такиеже как и в папке data
+Папки с результатами создаются автоматически
 
