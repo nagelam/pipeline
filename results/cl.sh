@@ -1,7 +1,7 @@
 #!/bin/bash
 
 SEARCH_PATH="."
-echo "delete all .csv, .json and .png in $SEARCH_PATH"
+echo "delete all .csv, .json in $SEARCH_PATH"
 echo "delete? (y/n)"
 read -r confirm
 if [[ "$confirm" != "y" ]]; then

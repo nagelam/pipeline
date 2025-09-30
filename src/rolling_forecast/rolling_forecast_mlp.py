@@ -113,8 +113,8 @@ class RollingForecasterMLP:
                 group_ids=["series"],
                 max_encoder_length=max_encoder_length,
                 max_prediction_length=1,
-                time_varying_unknown_reals=[target_col] + req_err_lag,
-                time_varying_known_reals=feature,
+                time_varying_unknown_reals=[target_col],
+                time_varying_known_reals=feature + req_err_lag,
                 static_categoricals=["series"],
             )
 
@@ -160,8 +160,8 @@ class RollingForecasterMLP:
                 group_ids=["series"],
                 max_encoder_length=max_encoder_length,
                 max_prediction_length=1,
-                time_varying_unknown_reals=[target_col] + req_err_lag,
-                time_varying_known_reals=feature,
+                time_varying_unknown_reals=[target_col],
+                time_varying_known_reals=feature + req_err_lag,
                 static_categoricals=["series"],
                 allow_missing_timesteps=True,
             )

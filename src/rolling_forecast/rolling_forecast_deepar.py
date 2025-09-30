@@ -13,6 +13,8 @@ from pytorch_forecasting.metrics import MultivariateNormalDistributionLoss, Mult
 import lightning.pytorch as pl
 from src.models.deepar_model import DeepARForecaster
 from lightning.pytorch.callbacks import EarlyStopping
+import matplotlib.pyplot as plt
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 logging.getLogger("lightning.pytorch.utilities.rank_zero").setLevel(logging.ERROR)
@@ -26,6 +28,7 @@ class RollingForecasterDeepAR:
         self.config = config
         self.training_config = config['training']
         self.feature_config = config['feature_engineering']
+        self.output_dir = Path(self.config['output']['results_dir'])
 
     def rolling_forecast(
             self,
@@ -53,18 +56,19 @@ class RollingForecasterDeepAR:
         lr = self.training_config['learning_rate']
         batch_size = self.training_config['batch_size']
 
-        cfg_req = self.feature_config['requests_lags']
-        cfg_err = self.feature_config['errors_lags']
-        lags_req = []
-        for key, values in cfg_req.items():
-            lags_req.extend(values)
-        lags_req = sorted({int(l) for l in lags_req if isinstance(l, int) and l >= 0 and l < timesteps // 2})
+        """
+                cfg_req = self.feature_config['requests_lags']
+                cfg_err = self.feature_config['errors_lags']
+                lags_req = []
+                for key, values in cfg_req.items():
+                    lags_req.extend(values)
+                lags_req = sorted({int(l) for l in lags_req if isinstance(l, int) and l >= 0 and l <timesteps//2})
 
-        lags_err = []
-        for key, values in cfg_req.items():
-            lags_err.extend(values)
-        lags_err = sorted({int(l) for l in lags_err if isinstance(l, int) and l >= 0 and l < timesteps // 2})
-
+                lags_err = []
+                for key, values in cfg_req.items():
+                    lags_err.extend(values)
+                lags_err = sorted({int(l) for l in lags_err if isinstance(l, int) and l >= 0 and l < timesteps//2})
+        """
         # разделение на признаки и таргеты
         y_cols = [req_col, err_col]
         feature_cols = [c for c in df_with_lags.columns if c not in y_cols]
@@ -126,7 +130,7 @@ class RollingForecasterDeepAR:
                     max_encoder_length=timesteps,
                     min_prediction_length=1,
                     max_prediction_length=1,
-                    time_varying_known_reals=feature,
+                    time_varying_known_reals=feature + req_err_lag,
                     time_varying_unknown_reals=y_cols,
                     target_normalizer=MultiNormalizer([
                         GroupNormalizer(groups=["group"], method="standard"),
@@ -134,7 +138,7 @@ class RollingForecasterDeepAR:
                     ]),
                     add_relative_time_idx=True,
                     add_encoder_length=True,
-                    lags={req_col: lags_req, err_col: lags_req}
+                    # lags={req_col:lags_req,err_col:lags_req}
 
                 )
 
@@ -199,7 +203,7 @@ class RollingForecasterDeepAR:
                     })
 
                 # метрики для окна
-                mae_req = mean_absolute_error(preds[:, 0], preds[:, 0])
+                mae_req = mean_absolute_error(trues[:, 0], preds[:, 0])
                 mae_err = mean_absolute_error(trues[:, 1], preds[:, 1])
                 mse_req = mean_squared_error(trues[:, 0], preds[:, 0])
                 mse_err = mean_squared_error(trues[:, 1], preds[:, 1])
@@ -219,7 +223,6 @@ class RollingForecasterDeepAR:
             window_id += 1
             gc.collect()
 
-        # агрегированные метрики
         agg_metrics = pd.DataFrame({
             "MAE_req_mean": [np.mean(mae_req_list)] if mae_req_list else [np.nan],
             "MAE_err_mean": [np.mean(mae_err_list)] if mae_err_list else [np.nan],
