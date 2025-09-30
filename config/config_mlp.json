@@ -18,10 +18,10 @@
     "max_encoder_length": 24,
     "train_window": 528,
     "predict_window": 336,
-    "epochs": 30,
+    "epochs": 200,
     "learning_rate": 0.001,
-    "batch_size": 4096,
-    "early_stopping_patience": 5
+    "batch_size": 32,
+    "early_stopping_patience": 7
   },
 
   "model": {

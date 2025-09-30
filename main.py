@@ -25,7 +25,7 @@ pipeline_mod = importlib.import_module("src.pipeline")
 TimeSeriesPipeline = getattr(pipeline_mod, "TimeSeriesPipeline")
 
 
-def find_data_folders(base_dir: str) ->list:
+def find_data_folders(base_dir: str) -> list:
     """
     Ищет датасеты: в каждой подпапке base_dir
     проверяет наличие файлов requests.csv.zstd и errors.csv.zstd.
@@ -234,13 +234,13 @@ def run_pipeline_for_folder(folder_path: Path, config_template: dict, use_decode
 
 def main():
     parser = argparse.ArgumentParser(description='пакетная обработка временных рядов')
-    parser.add_argument('--data-dir', '-d', required=True, help='Папка с подпапками данных')
+    parser.add_argument('--data-dir', '-d', default='data/folder_with_data', help='Папка с подпапками данных')
     parser.add_argument('--config', '-c', default='config/config_lstm.json', help='Файл конфигурации')
     parser.add_argument('--decoder', action='store_true', help='Использовать DecoderMLP вместо LSTM')
     parser.add_argument('--tcn', action='store_true', help='Использовать TCN')
     parser.add_argument('--deepar', action='store_true', help='Использовать DEEPAR')
     parser.add_argument('--gpu-check', action='store_true', help='проверить GPU')
-    parser.add_argument('--single-dataset', choices=['requests', 'errors'],
+    parser.add_argument('--single-dataset', choices=['requests', 'esrrors'],
                         help='Обработать только один тип датасета (requests или errors)')
 
     args = parser.parse_args()

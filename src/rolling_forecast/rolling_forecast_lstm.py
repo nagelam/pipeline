@@ -12,6 +12,8 @@ from typing import List, Tuple
 from tensorflow.keras.callbacks import EarlyStopping
 
 from src.models.lstm_model import LSTMForecaster
+import matplotlib.pyplot as plt
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +23,7 @@ class RollingForecaster:
     Скользящее окно прогнозирование при помощи LSTM-модели.
 
     Идея:
-        Делим исходный датафрейм на окна обучаемся на размере train_window
+        Делим исходный датафрейм на окна, обучаемся на размере train_window
        и для каждого окна строим локальную LSTM
 
         Модель предсказывает на размер predict_window(или меньше если данных на n шаге < predict_window)
@@ -35,6 +37,7 @@ class RollingForecaster:
         self.config = config
         self.training_config = config['training']
         self.forecaster = LSTMForecaster(config)
+        self.output_dir = Path(self.config['output']['results_dir'])
 
     def rolling_forecast(
             self,
@@ -74,6 +77,7 @@ class RollingForecaster:
 
         # Убираем второй таргет
         df = df_with_lags.drop(columns=[second_target], errors='ignore')
+
         # скалируем
         scaler_feat = MinMaxScaler().fit(df.drop(columns=[target_col]))
         scaler_tgt = MinMaxScaler().fit(df[[target_col]])
@@ -143,6 +147,7 @@ class RollingForecaster:
                     # Сдвигаем окно
                     if i + timesteps < len(test_feats):
                         next_feat = test_feats[i + timesteps: i + timesteps + 1]  # (1, число столбцов)
+
                         init_input = np.vstack([init_input[0, 1:], next_feat])[
                             np.newaxis, ...]  # (1, длина таймстепс, число колонок)
 
@@ -150,11 +155,14 @@ class RollingForecaster:
                 preds = scaler_tgt.inverse_transform(
                     np.array(preds_scaled).reshape(-1, 1)
                 ).flatten()
+
+                preds = np.maximum(preds, 0)
+
                 trues = scaler_tgt.inverse_transform(
                     test_df[target_col].values[timesteps - 1:].reshape(-1, 1)
                 ).flatten()
                 dates = pd.to_datetime(test_df.index)[timesteps - 1:]
-                # pd.DataFrame(dates).to_csv('lstm(window_id).csv}',mode="a")
+                # pd.DataFrame(dates).to_csv('lstm(window_id).csv',mode="a")
                 # метрики по текущему окну которые потом будут усредненны по дням и поокнам
                 mae = mean_absolute_error(trues, preds)
                 sm = mean_squared_error(trues, preds)
@@ -189,6 +197,26 @@ class RollingForecaster:
 
         preds_df = pd.DataFrame(all_preds)
         preds_df['day'] = preds_df['date'].dt.date
+        if self.config['output']['save_results']:
+            true_full = df[[target_col]].copy()
+            true_full.index = pd.to_datetime(true_full.index)
+
+            plt.figure(figsize=(12, 6))
+            plt.plot(true_full.index.values, true_full[target_col].values, label='True (full)', color='steelblue')
+
+            # plt.figure(figsize=(12, 6))
+            plt.plot(preds_df['date'].values, preds_df['true'].values, label='True', color='blue')
+            plt.plot(preds_df['date'].values, preds_df['pred'].values, label='Pred', color='orange', linestyle='--')
+            plt.xlabel('Date')
+            plt.ylabel('Value')
+            plt.title(f'True vs Pred {target_col}')
+            plt.legend()
+            plt.grid(True)
+            plt.tight_layout()
+            plot_path = self.output_dir / f'{target_col}, lstm.png'
+            plt.savefig(plot_path)
+            plt.close()
+            logger.info(f"true vs pred {plot_path}")
 
         daily_metrics = (
             preds_df.groupby('day')

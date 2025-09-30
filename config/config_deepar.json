@@ -28,13 +28,12 @@
     }
   },
   "training": {
-    "timesteps": 24,
+    "timesteps": 64,
     "train_window": 528,
     "predict_window": 336,
     "epochs": 2,
-    "learning_rate": 0.0032,
-    "batch_size": 1024,
-    "context_length": 24,
+    "learning_rate": 0.001,
+    "batch_size": 16,
     "prediction_length": 1
   },
   "output": {

@@ -39,7 +39,7 @@ class DecoderMLPForecaster:
         self.training_config = config['training']
 
     def build_model(self,
-                    layers_config:list[Dict[str, Any]],
+                    layers_config: list[Dict[str, Any]],
                     max_encoder_length: int,
                     dataset: TimeSeriesDataSet,
                     learning_rate: float) -> DecoderMLP:
@@ -74,4 +74,3 @@ class DecoderMLPForecaster:
         logger.info(f"DecoderMLP with hidden_size={hidden_size},dropout={dropout}")
 
         return model
-

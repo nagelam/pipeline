@@ -12,6 +12,7 @@ from pytorch_forecasting.data import GroupNormalizer, MultiNormalizer
 from pytorch_forecasting.metrics import MultivariateNormalDistributionLoss, MultiLoss
 import lightning.pytorch as pl
 from src.models.deepar_model import DeepARForecaster
+from lightning.pytorch.callbacks import EarlyStopping
 
 logger = logging.getLogger(__name__)
 logging.getLogger("lightning.pytorch.utilities.rank_zero").setLevel(logging.ERROR)
@@ -24,6 +25,7 @@ class RollingForecasterDeepAR:
     def __init__(self, config: dict):
         self.config = config
         self.training_config = config['training']
+        self.feature_config = config['feature_engineering']
 
     def rolling_forecast(
             self,
@@ -51,8 +53,23 @@ class RollingForecasterDeepAR:
         lr = self.training_config['learning_rate']
         batch_size = self.training_config['batch_size']
 
+        cfg_req = self.feature_config['requests_lags']
+        cfg_err = self.feature_config['errors_lags']
+        lags_req = []
+        for key, values in cfg_req.items():
+            lags_req.extend(values)
+        lags_req = sorted({int(l) for l in lags_req if isinstance(l, int) and l >= 0 and l < timesteps // 2})
+
+        lags_err = []
+        for key, values in cfg_req.items():
+            lags_err.extend(values)
+        lags_err = sorted({int(l) for l in lags_err if isinstance(l, int) and l >= 0 and l < timesteps // 2})
+
         # разделение на признаки и таргеты
         y_cols = [req_col, err_col]
+        feature_cols = [c for c in df_with_lags.columns if c not in y_cols]
+        req_err_lag = [c for c in feature_cols if c.startswith(('req', 'err'))]  # лаги
+        feature = [c for c in feature_cols if c not in req_err_lag]  # значения как час, неделя, синус_час
         X_df = df_with_lags.drop(columns=y_cols)
         Y_df = df_with_lags[y_cols]
 
@@ -99,8 +116,6 @@ class RollingForecasterDeepAR:
                 )
                 train_data["group"] = 0
                 train_data["time_idx"] = np.arange(len(train_data))
-                train_data["hour"] = train_data.index.hour
-                train_data["day_of_week"] = train_data.index.dayofweek
 
                 train_ds = TimeSeriesDataSet(
                     train_data,
@@ -110,15 +125,17 @@ class RollingForecasterDeepAR:
                     min_encoder_length=max(1, timesteps // 2),
                     max_encoder_length=timesteps,
                     min_prediction_length=1,
-                    max_prediction_length=curr_pred,
-                    time_varying_known_reals=["time_idx", "hour", "day_of_week"],
+                    max_prediction_length=1,
+                    time_varying_known_reals=feature,
                     time_varying_unknown_reals=y_cols,
                     target_normalizer=MultiNormalizer([
                         GroupNormalizer(groups=["group"], method="standard"),
                         GroupNormalizer(groups=["group"], method="standard")
                     ]),
                     add_relative_time_idx=True,
-                    add_encoder_length=True
+                    add_encoder_length=True,
+                    lags={req_col: lags_req, err_col: lags_req}
+
                 )
 
                 model = DeepARForecaster.build_model(
@@ -127,7 +144,6 @@ class RollingForecasterDeepAR:
                     dataset=train_ds,
                     learning_rate=lr
                 )
-
                 trainer = pl.Trainer(
                     max_epochs=epochs,
                     accelerator="gpu" if torch.cuda.is_available() else "cpu",
@@ -151,24 +167,12 @@ class RollingForecasterDeepAR:
                         window_df[t] = 0.0
                     window_df["group"] = 0
                     window_df["time_idx"] = np.arange(timesteps)
-                    window_df["hour"] = test_index[i: i + timesteps].hour
-                    window_df["day_of_week"] = test_index[i: i + timesteps].dayofweek
 
-                    ts_ds = TimeSeriesDataSet(
+                    ts_ds = TimeSeriesDataSet.from_dataset(
+                        train_ds,
                         window_df,
-                        time_idx="time_idx",
-                        target=y_cols,
-                        group_ids=["group"],
-                        min_encoder_length=timesteps - 1,
-                        max_encoder_length=timesteps - 1,
-                        min_prediction_length=1,
-                        max_prediction_length=1,
-                        time_varying_known_reals=["time_idx", "hour", "day_of_week"],
-                        time_varying_unknown_reals=y_cols,
-                        target_normalizer=train_ds.target_normalizer,
-                        add_relative_time_idx=True,
-                        add_encoder_length=True,
-                        allow_missing_timesteps=True
+                        predict=True,
+                        stop_randomization=True,  # без случайной маскировки для воспроизводимости
                     )
                     dl = ts_ds.to_dataloader(train=False, batch_size=1)
                     p_vec = model.predict(dl)

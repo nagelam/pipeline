@@ -16,7 +16,6 @@ class DeepARForecaster:
             dataset: TimeSeriesDataSet,
             learning_rate: float
     ) -> DeepAR:
-
         cfg = layers_config[0]
 
         hidden_size = int(cfg.get("hidden_size", 32))
@@ -33,7 +32,8 @@ class DeepARForecaster:
                 MultivariateNormalDistributionLoss(rank=2),
                 MultivariateNormalDistributionLoss(rank=2),
             ]),
-            optimizer="adam"
+            optimizer="adam",
+
         )
 
         logger.info(

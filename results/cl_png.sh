@@ -1,7 +1,7 @@
 #!/bin/bash
 
 SEARCH_PATH="."
-echo "delete all .csv, .json and .png in $SEARCH_PATH"
+echo "delete all .png in $SEARCH_PATH"
 echo "delete? (y/n)"
 read -r confirm
 if [[ "$confirm" != "y" ]]; then
@@ -9,6 +9,6 @@ if [[ "$confirm" != "y" ]]; then
     exit 0
 fi
 
-find "$SEARCH_PATH" -maxdepth 2 -type f \( -name "*.csv" -o -name "*.json" \) -print -delete
+find "$SEARCH_PATH" -maxdepth 2 -type f \( -name "*.png" \) -print -delete
 
 echo "files deleted."

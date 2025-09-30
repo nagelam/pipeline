@@ -13,6 +13,9 @@ from lightning.pytorch import Trainer
 
 from src.models.mlp_model import DecoderMLPForecaster
 
+import matplotlib.pyplot as plt
+from pathlib import Path
+
 logger = logging.getLogger(__name__)
 
 
@@ -25,6 +28,7 @@ class RollingForecasterMLP:
         self.config = config
         self.training_config = config['training']
         self.forecaster = DecoderMLPForecaster(config)
+        self.output_dir = Path(self.config['output']['results_dir'])
 
     def rolling_forecast(
             self,
@@ -38,7 +42,7 @@ class RollingForecasterMLP:
         Args:
             df_with_lags: датафрейм с таргетом
             target_col: название таргета
-            second_target: НЕ ИСПОЛЬЗУЕТСЯ
+            second_target: таргет колонка для другого датасета
             layers_config: список конфигураций слоёв decoder_mlp
 
         Returns:
@@ -58,7 +62,9 @@ class RollingForecasterMLP:
         # Разделяем признаки и таргет
         y_cols = [target_col, second_target]
         feature_cols = [c for c in df_with_lags.columns if c not in y_cols]
-        print(feature_cols)
+        req_err_lag = [c for c in feature_cols if c.startswith(('req', 'err'))]  # лаги
+        feature = [c for c in feature_cols if c not in req_err_lag]  # значения как час, неделя, синус_час
+
         scaler_feat = MinMaxScaler().fit(df_with_lags[feature_cols])
         scaler_tgt = MinMaxScaler().fit(df_with_lags[[target_col]])
 
@@ -107,9 +113,9 @@ class RollingForecasterMLP:
                 group_ids=["series"],
                 max_encoder_length=max_encoder_length,
                 max_prediction_length=1,
-                time_varying_unknown_reals=[target_col] + feature_cols,
+                time_varying_unknown_reals=[target_col] + req_err_lag,
+                time_varying_known_reals=feature,
                 static_categoricals=["series"],
-                allow_missing_timesteps=True,
             )
 
             val_ds = TimeSeriesDataSet.from_dataset(
@@ -154,7 +160,8 @@ class RollingForecasterMLP:
                 group_ids=["series"],
                 max_encoder_length=max_encoder_length,
                 max_prediction_length=1,
-                time_varying_unknown_reals=[target_col] + feature_cols,
+                time_varying_unknown_reals=[target_col] + req_err_lag,
+                time_varying_known_reals=feature,
                 static_categoricals=["series"],
                 allow_missing_timesteps=True,
             )
@@ -169,6 +176,9 @@ class RollingForecasterMLP:
                 preds_scaled = pred_all[-min(len(pred_all), len(test_df)):].reshape(-1, 1)
 
             preds = scaler_tgt.inverse_transform(preds_scaled).flatten()
+
+            preds = np.maximum(preds, 0)
+
             trues = scaler_tgt.inverse_transform(test_df[target_col].values[:len(preds)].reshape(-1, 1)).flatten()
 
             mae = mean_absolute_error(trues, preds)
@@ -177,9 +187,33 @@ class RollingForecasterMLP:
             mse_list.append(mse)
 
             dates = test_df.index[:len(preds)]
-            # pd.DataFrame(dates).to_csv('mlp{window_id}.csv}', mode="a")
+            # pd.DataFrame(dates).to_csv('mlp{window_id}.csv', mode="a")
             for ts, t, pr in zip(dates, trues, preds):
                 all_preds.append({"date": ts, "true": t, "pred": pr})
+
+            if self.config['output']['save_results']:
+                preds_df = pd.DataFrame(all_preds)
+                preds_df['date'] = pd.to_datetime(preds_df['date'])
+
+                true_full = df_with_lags[[target_col]].copy()
+                true_full.index = pd.to_datetime(true_full.index)
+
+                plt.figure(figsize=(12, 6))
+                plt.plot(true_full.index.values, true_full[target_col].values, label='True (full)', color='steelblue')
+
+                # plt.figure(figsize=(12, 6))
+                plt.plot(preds_df['date'].values, preds_df['true'].values, label='True', color='blue')
+                plt.plot(preds_df['date'].values, preds_df['pred'].values, label='Pred', color='orange', linestyle='--')
+                plt.xlabel('Date')
+                plt.ylabel('Value')
+                plt.title(f'True vs Pred {target_col}')
+                plt.legend()
+                plt.grid(True)
+                plt.tight_layout()
+
+                plot_path = self.output_dir / f'{target_col}, decoder_mlp.png'
+                plt.savefig(plot_path)
+                plt.close()
 
             logger.info(f"DecoderMLP Window {window_id}: MAE={mae:.3f}, MSE={mse:.3f}")
 

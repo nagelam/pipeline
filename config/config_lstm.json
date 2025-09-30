@@ -34,11 +34,11 @@
         "timesteps": 24,
         "train_window": 528,
         "predict_window": 336,
-        "epochs": 30,
-        "learning_rate": 0.0032,
-        "batch_size": 1024,
+        "epochs": 200,
+        "learning_rate": 0.001,
+        "batch_size": 32,
         "validation_split": 0.1,
-        "early_stopping_patience": 5
+        "early_stopping_patience": 7
     },
     "output": {
       "results_dir": "results",

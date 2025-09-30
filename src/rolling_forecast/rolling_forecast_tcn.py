@@ -13,6 +13,8 @@ from sklearn.preprocessing import MinMaxScaler
 from src.models.tcn_model import TCNForecaster
 
 logger = logging.getLogger(__name__)
+import matplotlib.pyplot as plt
+from pathlib import Path
 
 
 class RollingForecasterTCN:
@@ -22,6 +24,7 @@ class RollingForecasterTCN:
         self.config = config
         self.training_config = config['training']
         self.forecaster = TCNForecaster(config)
+        self.output_dir = Path(self.config['output']['results_dir'])
 
     def rolling_forecast(
             self,
@@ -98,8 +101,8 @@ class RollingForecasterTCN:
             try:
                 # тут перекрывающиеся окна для тренировки
                 X_train, Y_train = self.create_sequences(
-                    X_train_df.values,  # (число строк, число колонок)
-                    y_train_df.values,  # (число строк, 2 таргета)
+                    X_train_df.values,
+                    y_train_df.values,
                     timesteps
                 )
 
@@ -123,7 +126,7 @@ class RollingForecasterTCN:
                 )
 
                 # Пошчасовой прогноз на тесте
-                feat_stream = X_test_df.values  # (число строк, число колонок)
+                feat_stream = X_test_df.values
 
                 init_input = feat_stream[:timesteps][np.newaxis, ...]  # (1, длина таймстепс, число колонок)
                 preds_scaled = []
@@ -136,17 +139,20 @@ class RollingForecasterTCN:
                         next_feat = feat_stream[i + timesteps].reshape(1, -1)
                         window = np.vstack(
                             [init_input[0, 1:], next_feat])  # (длина таймстепс, число колонок) сдвиг на 1
-                        init_input = window[np.newaxis, ...]  # обратно к (1, длина таймстепс, число колонок)
 
+                        init_input = window[np.newaxis, ...]  # обратно к (1, длина таймстепс, число колонок)
                 preds_arr = np.asarray(preds_scaled)  # (число предсказаний, 1, 2)
+
                 preds_arr = preds_arr[:, -1, :]  # (число предсказаний, 2)
+
                 preds = y_scaler.inverse_transform(preds_arr)
+                preds = np.maximum(preds, 0)
 
                 trues_s = y_test_df.values[timesteps - 1:]  # (число предсказаний, 2)
                 trues = y_scaler.inverse_transform(trues_s)  # (число предсказаний, 2)
 
                 dates = pd.to_datetime(y_test_df.index)[timesteps - 1:]
-                # pd.DataFrame(dates).to_csv('tcn(window_id).csv}', mode="a")
+                # pd.DataFrame(dates).to_csv('tcn(window_id).csv', mode="a")
 
                 # Метрики по окну
                 mae_req = mean_absolute_error(trues[:, 0], preds[:, 0])
@@ -196,6 +202,51 @@ class RollingForecasterTCN:
 
         preds_df = pd.DataFrame(all_preds)
         preds_df['day'] = preds_df['date'].dt.date
+
+        if self.config['output']['save_results']:
+            preds_df['date'] = pd.to_datetime(preds_df['date'])
+            true_full = df_with_lags[[req_col]].copy()
+            true_full.index = pd.to_datetime(true_full.index)
+
+            plt.figure(figsize=(12, 6))
+            # полная истина по всему промежутку
+            plt.plot(true_full.index.values, true_full[req_col].values, label='True (full)', color='steelblue')
+
+            # plt.figure(figsize=(12, 6))
+            plt.plot(preds_df['date'].values, preds_df['true_req'].values, label='True Requests', color='blue')
+            plt.plot(preds_df['date'].values, preds_df['pred_req'].values, label='Pred Requests', color='orange',
+                     linestyle='--')
+            plt.xlabel('Date')
+            plt.ylabel('Value')
+            plt.title('True vs Pred Requests')
+            plt.legend()
+            plt.grid(True)
+            plt.tight_layout()
+            req_plot_path = self.output_dir / 'req_target, tcn.png'
+            plt.savefig(req_plot_path)
+            plt.close()
+            logger.info(f"Saved requests true vs pred plot to {req_plot_path}")
+
+            true_full = df_with_lags[[err_col]].copy()
+            true_full.index = pd.to_datetime(true_full.index)
+
+            plt.figure(figsize=(12, 6))
+            plt.plot(true_full.index.values, true_full[err_col].values, label='True (full)', color='steelblue')
+
+            # plt.figure(figsize=(12, 6))
+            plt.plot(preds_df['date'].values, preds_df['true_err'].values, label='True Errors', color='blue')
+            plt.plot(preds_df['date'].values, preds_df['pred_err'].values, label='Pred Errors', color='orange',
+                     linestyle='--')
+            plt.xlabel('Date')
+            plt.ylabel('Value')
+            plt.title('True vs Pred Errors')
+            plt.legend()
+            plt.grid(True)
+            plt.tight_layout()
+            err_plot_path = self.output_dir / 'err_target, tcn.png'
+            plt.savefig(err_plot_path)
+            plt.close()
+            logger.info(f"Saved errors true vs pred plot to {err_plot_path}")
 
         # Дневные метрики
         daily_metrics = (

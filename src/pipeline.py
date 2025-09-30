@@ -169,7 +169,6 @@ class TimeSeriesPipeline:
     Функция для работы с одним датасетом без мерджа
     """
 
-
     def compare_single_dataset(self, dataset_type: str) -> pd.DataFrame:
         """Тоже самое что compare_architectures_single но только для 1 ряда(запросов или ошибок)
         в dataset_type должно быть 'requests' или 'errors'
@@ -197,7 +196,7 @@ class TimeSeriesPipeline:
             try:
                 layers = arch_cfgs[arch]['layers']
                 logger.info(layers)
-                agg, daily = self.rolling_forecaster.rolling_forecast_single(features_df, target_col,layers)
+                agg, daily = self.rolling_forecaster.rolling_forecast_single(features_df, target_col, layers)
                 result = {
                     'model_type': model_type,
                     'target_type': dataset_type,
