@@ -240,7 +240,7 @@ def main():
     parser.add_argument('--tcn', action='store_true', help='Использовать TCN')
     parser.add_argument('--deepar', action='store_true', help='Использовать DEEPAR')
     parser.add_argument('--gpu-check', action='store_true', help='проверить GPU')
-    parser.add_argument('--single-dataset', choices=['requests', 'esrrors'],
+    parser.add_argument('--single-dataset', choices=['requests', 'errors'],
                         help='Обработать только один тип датасета (requests или errors)')
 
     args = parser.parse_args()
